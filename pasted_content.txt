@@ -1,0 +1,337 @@
+                document.getElementById('transferRequestSection').classList.remove('hidden');
+            }
+        }
+        
+        function navigateTo(contentId) {
+            document.querySelectorAll('.content-view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            const selectedView = document.getElementById(contentId);
+            if (selectedView) {
+                selectedView.classList.remove('hidden');
+            }
+            
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            const activeLink = document.querySelector(`.sidebar-link[data-content-id="${contentId}"]`);
+            if (activeLink) {
+                activeLink.classList.add('active');
+            }
+            
+            const currentBreadcrumb = document.getElementById('breadcrumbCurrent');
+            if(currentBreadcrumb) {
+                const navKey = `nav${contentId.split('-')[0].charAt(0).toUpperCase() + contentId.split('-')[0].slice(1)}`;
+                currentBreadcrumb.innerText = translations[currentLang][navKey] || translations[currentLang].navOverview;
+            }
+        }
+
+        // Logout Function
+        function logout() {
+            isLoggedIn = false;
+            loggedInUsername = "";
+            userBranchInfo = null;
+            isManagerUser = false;
+            selectedSheetId = "";
+            selectedSheetName = "";
+            accessibleSheets = [];
+            allConfiguredBranches = [];
+            allPendingRequests = [];
+            
+            const dropdown = document.getElementById('userDropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('headerNav').classList.add('hidden');
+            document.getElementById('mainLayout').classList.add('hidden');
+
+            document.getElementById('password').value = '';
+            document.getElementById('loginError').textContent = '';
+
+            const sheetSelect = document.getElementById('sheetSelect');
+            if (sheetSelect) sheetSelect.innerHTML = `<option value="">${translations[currentLang].statusLoadingSheets}</option>`;
+            const filterSelect = document.getElementById('filterSendingBranch');
+            if (filterSelect) filterSelect.innerHTML = `<option value="All">${translations[currentLang].allBranchesFilter}</option>`;
+            disableButtons();
+            disableTransferForm();
+            setStatus(translations[currentLang].statusLoginRequired, 'info');
+        }
+
+        // Initialization
+        window.onload = function() {
+            document.getElementById('headerNav').classList.add('hidden');
+            document.getElementById('mainLayout').classList.add('hidden');
+
+            const rememberedUsername = localStorage.getItem('rememberedUsername');
+            if (rememberedUsername) {
+                document.getElementById('username').value = rememberedUsername;
+                document.getElementById('rememberMe').checked = true;
+            }
+
+            const loginForm = document.getElementById('loginForm');
+            if(loginForm) loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                login();
+            });
+
+            document.querySelectorAll('.sidebar-link[data-content-id]').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    navigateTo(e.currentTarget.dataset.contentId);
+                    updateTexts();
+                });
+            });
+
+            const userProfile = document.getElementById('userProfile');
+            if (userProfile) {
+                userProfile.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const dropdown = document.getElementById('userDropdown');
+                    if (dropdown) {
+                        dropdown.classList.toggle('hidden');
+                    }
+                });
+            }
+
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('userDropdown');
+                const userProfile = document.getElementById('userProfile');
+                if (dropdown && userProfile && !userProfile.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+            
+            const removeItemBtn = document.querySelector('#itemInputsContainer .remove-item-btn');
+            if(removeItemBtn) removeItemBtn.addEventListener('click', removeItemRow);
+            const addItemBtn = document.getElementById('addItemBtn');
+            if(addItemBtn) addItemBtn.addEventListener('click', addItemRow);
+            
+            const transferForm = document.getElementById('transferRequestForm');
+            if(transferForm) transferForm.addEventListener('submit', submitTransferRequest);
+            
+            updateTexts();
+        };
+
+        // Status Message Utility
+        function setStatus(text, type = "info", showSpinner = false) {
+            const statusDiv = document.getElementById("status");
+            const globalStatusContainer = document.getElementById("global-status");
+            if (statusDiv && globalStatusContainer) {
+                statusDiv.className = `status-message ${type}`;
+                globalStatusContainer.classList.remove('hidden');
+                statusDiv.innerHTML = showSpinner ? `<span class="spinner"></span>${text}` : text;
+                console.log("Status:", text);
+
+                if (type !== 'loading' && type !== 'info') {
+                    setTimeout(() => {
+                        globalStatusContainer.classList.add('hidden');
+                    }, 5000);
+                }
+            }
+        }
+
+        // Language Toggle
+        function toggleLang() {
+            currentLang = currentLang === "en" ? "ar" : "en";
+            updateTexts();
+            document.body.classList.toggle("rtl", currentLang === "ar");
+            if (isLoggedIn && userBranchInfo) {
+                loadAccessibleSheets(userBranchInfo);
+                populateSendingBranches();
+                loadAllBranchNamesForFilter();
+            }
+            filterPendingRequests();
+        }
+
+        // Update UI Texts
+        function updateTexts() {
+            const t = translations[currentLang];
+            
+            document.getElementById("dashboardTitle").innerText = t.title;
+            const sheetLabelElement = document.getElementById("sheetLabel");
+            if (sheetLabelElement) sheetLabelElement.innerText = t.sheetLabel;
+            
+            const currentView = document.querySelector('.content-view:not(.hidden)');
+            const currentViewId = currentView ? currentView.id : 'overview-content';
+            const contentKey = currentViewId.split('-')[0];
+            
+            const titleElement = document.getElementById(`${contentKey}Title`);
+            const subtitleElement = document.getElementById(`${contentKey}Subtitle`);
+            if (titleElement) titleElement.innerText = t[`${contentKey}Title`] || t.title;
+            if (subtitleElement) subtitleElement.innerText = t[`${contentKey}Subtitle`] || t.subtitle;
+
+            const currentBreadcrumb = document.getElementById('breadcrumbCurrent');
+            if (currentBreadcrumb) {
+                const activeLink = document.querySelector('.sidebar-link.active');
+                const contentId = activeLink ? activeLink.dataset.contentId : 'overview-content';
+                const navKey = `nav${contentId.split('-')[0].charAt(0).toUpperCase() + contentId.split('-')[0].slice(1)}`;
+                currentBreadcrumb.innerText = t[navKey] || t.navOverview;
+            }
+
+            // Update all navigation and UI elements
+            const elements = {
+                branchSelectionTitle: 'SelectBranchHeader',
+                branchSelectionDesc: 'SelectBrancDesc',
+                toolsHeader: 'toolsHeader',
+                toolsDesc: 'toolsDesc',
+                pdfHeader: 'pdfHeader',
+                reportsDesc: 'reportsDesc',
+                poAutomationHeader: 'poAutomationHeader',
+                procurementDesc: 'procurementDesc',
+                transferRequestHeader: 'transferRequestHeader',
+                transferRequestDesc: 'transferRequestDesc',
+                transferApprovalHeader: 'transferApprovalHeader',
+                transferApprovalDesc: 'transferApprovalDesc',
+                btnUpdateText: 'updateAll',
+                btnCheckTransferText: 'checkTransfer',
+                btnPurchaseText: 'btnPurchase',
+                btnOverstockText: 'btnOverstock',
+                btnStagnantText: 'btnStagnant',
+                btnGeneratePOsText: 'btnGeneratePOs',
+                submitTransferText: 'submitTransferRequestBtn',
+                addItemText: 'addItem',
+                navOverview: 'navOverview',
+                navAlerts: 'navAlerts',
+                navInventory: 'navInventory',
+                navTransfers: 'navTransfers',
+                navProcurement: 'navProcurement',
+                navExpiry: 'navExpiry',
+                navCompliance: 'navCompliance',
+                navAnalytics: 'navAnalytics',
+                navDocuments: 'navDocuments',
+                navAudit: 'navAudit',
+                navSettings: 'navSettings',
+                navLogout: 'navLogout',
+                sidebarDashboard: 'sidebarDashboard',
+                sidebarSupplyChain: 'sidebarSupplyChain',
+                sidebarReports: 'sidebarReports',
+                sidebarSystem: 'sidebarSystem',
+                langSwitchText: 'langSwitch',
+                dropdownLogout: 'navLogout',
+                requestingBranchLabel: 'requestingBranchLabel',
+                sendingBranchLabel: 'sendingBranchLabel',
+                filterLabel: 'filterBySendingBranch'
+            };
+
+            Object.entries(elements).forEach(([id, key]) => {
+                const element = document.getElementById(id);
+                if (element) element.innerText = t[key];
+            });
+
+            // Update dynamic elements
+            document.querySelectorAll('.transferItemNameLabel').forEach(el => el.innerText = t.transferItemNameLabel);
+            document.querySelectorAll('.transferItemUnitLabel').forEach(el => el.innerText = t.transferItemUnitLabel);
+            document.querySelectorAll('.transferRequestedQuantityLabel').forEach(el => el.innerText = t.transferRequestedQuantityLabel);
+            
+            const rememberMeLabel = document.querySelector('label[for="rememberMe"]');
+            if (rememberMeLabel) rememberMeLabel.innerText = t.rememberMe;
+            const noRequestsRow = document.getElementById('noPendingRequestsRow');
+            if (noRequestsRow) noRequestsRow.children[0].textContent = t.noPendingRequests;
+            const allBranchesFilter = document.getElementById('filterSendingBranch');
+            if (allBranchesFilter && allBranchesFilter.options.length > 0) {
+                 allBranchesFilter.options[0].textContent = t.allBranchesFilter;
+            }
+        }
+        
+        // Button and Form Controls (remaining functions from original code)
+        function enableButtons() {
+            const buttons = ["btnUpdateAll", "btnCheckTransfer", "btnPurchase", "btnOverstock", "btnStagnant", "btnGeneratePOs"];
+            buttons.forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.disabled = false;
+            });
+            if (!isManagerUser) {
+                enableTransferForm();
+            }
+        }
+
+        function disableButtons() {
+            const buttons = ["btnUpdateAll", "btnCheckTransfer", "btnPurchase", "btnOverstock", "btnStagnant", "btnGeneratePOs"];
+            buttons.forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.disabled = true;
+            });
+            disableTransferForm();
+        }
+
+        function enableTransferForm() {
+            const requestingBranchDisplay = document.getElementById('requestingBranchDisplay');
+            if (requestingBranchDisplay) requestingBranchDisplay.value = selectedSheetName;
+            const sendingBranchSelect = document.getElementById('sendingBranchSelect');
+            if (sendingBranchSelect) sendingBranchSelect.disabled = false;
+            const addItemBtn = document.getElementById('addItemBtn');
+            if (addItemBtn) addItemBtn.disabled = false;
+            const submitTransferRequestBtn = document.getElementById('submitTransferRequestBtn');
+            if (submitTransferRequestBtn) submitTransferRequestBtn.disabled = false;
+
+            const firstItemRow = document.querySelector('.item-row');
+            if (firstItemRow) {
+                firstItemRow.querySelector('.transferItemName').disabled = false;
+                firstItemRow.querySelector('.transferItemUnit').disabled = false;
+                firstItemRow.querySelector('.transferRequestedQuantity').disabled = false;
+                firstItemRow.querySelector('.remove-item-btn').disabled = false;
+            }
+            populateSendingBranches();
+        }
+
+        function disableTransferForm() {
+            const requestingBranchDisplay = document.getElementById('requestingBranchDisplay');
+            if (requestingBranchDisplay) requestingBranchDisplay.value = '';
+            const sendingBranchSelect = document.getElementById('sendingBranchSelect');
+            if (sendingBranchSelect) sendingBranchSelect.disabled = true;
+            const addItemBtn = document.getElementById('addItemBtn');
+            if (addItemBtn) addItemBtn.disabled = true;
+            const submitTransferRequestBtn = document.getElementById('submitTransferRequestBtn');
+            if (submitTransferRequestBtn) submitTransferRequestBtn.disabled = true;
+            
+            const itemInputsContainer = document.getElementById('itemInputsContainer');
+            if(itemInputsContainer){
+                itemInputsContainer.innerHTML = `
+                    <div class="item-row">
+                        <div>
+                            <label class="form-label transferItemNameLabel"></label>
+                            <input type="text" class="form-input transferItemName" required disabled>
+                        </div>
+                        <div>
+                            <label class="form-label transferItemUnitLabel"></label>
+                            <input type="text" class="form-input transferItemUnit" disabled>
+                        </div>
+                        <div>
+                            <label class="form-label transferRequestedQuantityLabel"></label>
+                            <input type="number" class="form-input transferRequestedQuantity" min="1" value="1" required disabled>
+                        </div>
+                        <button type="button" class="remove-item-btn" disabled>
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                itemInputsContainer.querySelector('.remove-item-btn').addEventListener('click', removeItemRow);
+                updateTexts();
+            }
+            const statusDiv = document.getElementById('transferRequestStatus');
+            if (statusDiv) statusDiv.classList.add('hidden');
+        }
+
+        // Dropdown Change Handler
+        function onSheetChange() {
+            if (!isLoggedIn) return;
+
+            const select = document.getElementById("sheetSelect");
+            selectedSheetId = select.value;
+
+            const foundSheet = accessibleSheets.find(s => s.id === selectedSheetId);
+            selectedSheetName = foundSheet ? foundSheet.name : "";
+
+            console.log("Frontend: Sheet selected:", selectedSheetName, "(ID:", selectedSheetId, ")");
+
+            if (selectedSheetId) {
+                enableButtons();
+                setStatus(`Selected: ${selectedSheetName}`, "success");
+            } else {
+                disableButtons();
+                setStatus(translations[currentLang].statusSelectBranch, "info");
+            }
+        }
+
+        // Load Accessi
+(Content truncated due to size limit. Use page ranges or line ranges to read remaining content)

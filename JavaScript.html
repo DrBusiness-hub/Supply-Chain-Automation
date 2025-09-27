@@ -1,0 +1,52 @@
+<script>
+  // Function to load content into the main area
+  function loadContent(pageName) {
+    google.script.run.withSuccessHandler(function(htmlContent) {
+      document.getElementById("content-area").innerHTML = htmlContent;
+    }).getHtmlContent(pageName);
+  }
+
+  // Initial load of the dashboard overview
+  document.addEventListener("DOMContentLoaded", function() {
+    loadContent("DashboardOverview");
+
+    // Add event listeners for sidebar navigation
+    document.getElementById("sidebar").addEventListener("click", function(event) {
+      const target = event.target.closest("a[data-page]");
+      if (target) {
+        event.preventDefault();
+        const pageName = target.getAttribute("data-page");
+        loadContent(pageName);
+
+        // Update active state in sidebar (basic example)
+        document.querySelectorAll("#sidebar a").forEach(link => {
+          link.classList.remove("bg-gray-700", "text-white");
+          link.classList.add("text-gray-300", "hover:bg-gray-700", "hover:text-white");
+        });
+        target.classList.add("bg-gray-700", "text-white");
+        target.classList.remove("text-gray-300", "hover:bg-gray-700", "hover:text-white");
+      }
+    });
+  });
+
+  // Example of how to call server-side functions (Google Apps Script)
+  // function fetchData() {
+  //   google.script.run.withSuccessHandler(function(data) {
+  //     console.log(data);
+  //     // Update DOM with data
+  //   }).getSomeData();
+  // }
+
+  // function exportPdf(reportId) {
+  //   google.script.run.withSuccessHandler(function(url) {
+  //     window.open(url, '_blank');
+  //   }).exportReportAsPdf(reportId);
+  // }
+
+  // function exportExcel(reportId) {
+  //   google.script.run.withSuccessHandler(function(url) {
+  //     window.open(url, '_blank');
+  //   }).exportReportAsExcel(reportId);
+  // }
+</script>
+
