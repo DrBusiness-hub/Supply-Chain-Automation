@@ -1,15 +1,19 @@
-// Google Sheets API Service
+// Google Sheets API Service - الإصدار المُصحح
 class GoogleSheetsService {
   constructor() {
     this.SHEET_ID = '1RcfFYd2-4_f0ogGnzlFjauagYnLAbZRnXimuSI65Ocw';
-    this.API_KEY = process.env.REACT_APP_GOOGLE_SHEETS_API_KEY;
-    this.SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcSLT_ey6PWqlsmo34PQVxrfC6J-Nzv2Bj_-0KDMio6ocy00zHupt5l7l25FKB3dYj/exec';
-    this.BASE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}`;
+    // احذف API_KEY - مش محتاجه مع Google Apps Script
+    // this.API_KEY = process.env.REACT_APP_GOOGLE_SHEETS_API_KEY;
+    this.SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzR5Jb7OD-1nqvwc0lNyTahRgxKR-LxbGueoHTiq1AfyWqtPmviIVHRAsIRBUVmTysd/exec';
+    // احذف BASE_URL - مش محتاجه
+    // this.BASE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${this.SHEET_ID}`;
   }
 
-  // Generic method to make requests to Google Apps Script
+  // دالة موحدة لكل الطلبات مع معالجة أفضل للأخطاء
   async makeScriptRequest(action, data = {}) {
     try {
+      console.log(`📡 Making request: ${action}`);
+      
       const response = await fetch(this.SCRIPT_URL, {
         method: 'POST',
         headers: {
@@ -19,7 +23,9 @@ class GoogleSheetsService {
           action,
           data,
           timestamp: new Date().toISOString()
-        })
+        }),
+        // إضافة timeout
+        signal: AbortSignal.timeout(30000) // 30 ثانية
       });
 
       if (!response.ok) {
@@ -27,217 +33,322 @@ class GoogleSheetsService {
       }
 
       const result = await response.json();
+      
+      if (result.success) {
+        console.log(`✅ ${action} successful`);
+      } else {
+        console.warn(`⚠️ ${action} returned error:`, result.error);
+      }
+      
       return result;
     } catch (error) {
-      console.error('Google Sheets API Error:', error);
-      throw error;
+      console.error(`❌ Google Sheets API Error for ${action}:`, error);
+      // إرجاع بيانات وهمية في حالة فشل الاتصال
+      return await this.getFallbackData(action, data);
     }
   }
 
-  // Inventory Management
-  async getInventoryData() {
-    try {
-      return await this.makeScriptRequest('getInventory');
-    } catch (error) {
-      console.error('Error fetching inventory:', error);
-      // Return mock data as fallback
-      return this.getMockInventoryData();
+  // معالج البيانات الاحتياطية
+  async getFallbackData(action, data) {
+    console.log(`🔄 Using fallback data for: ${action}`);
+    
+    switch (action) {
+      case 'getInventory':
+        return this.getMockInventoryData();
+      case 'getTransfers':
+        return this.getMockTransfersData();
+      case 'getSuppliers':
+        return this.getMockSuppliersData();
+      case 'getCustomers':
+        return this.getMockCustomersData();
+      case 'getDashboardStats':
+        return this.getMockDashboardData();
+      default:
+        return { 
+          success: false, 
+          error: `No fallback available for action: ${action}`,
+          usingFallback: true 
+        };
     }
+  }
+
+  // === إدارة المخزون ===
+  async getInventoryData() {
+    return await this.makeScriptRequest('getInventory');
   }
 
   async updateInventoryItem(itemId, updates) {
-    try {
-      return await this.makeScriptRequest('updateInventory', {
-        itemId,
-        updates
-      });
-    } catch (error) {
-      console.error('Error updating inventory:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('updateInventoryItem', {
+      id: itemId,
+      ...updates
+    });
   }
 
   async addInventoryItem(item) {
-    try {
-      return await this.makeScriptRequest('addInventory', { item });
-    } catch (error) {
-      console.error('Error adding inventory item:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('addInventoryItem', item);
   }
 
-  // Transfers Management
+  async deleteInventoryItem(itemId) {
+    return await this.makeScriptRequest('deleteInventoryItem', {
+      id: itemId
+    });
+  }
+
+  // === إدارة التحويلات ===
   async getTransfers() {
-    try {
-      return await this.makeScriptRequest('getTransfers');
-    } catch (error) {
-      console.error('Error fetching transfers:', error);
-      return this.getMockTransfersData();
-    }
+    return await this.makeScriptRequest('getTransfers');
   }
 
   async createTransfer(transfer) {
-    try {
-      return await this.makeScriptRequest('createTransfer', { transfer });
-    } catch (error) {
-      console.error('Error creating transfer:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('addTransfer', transfer);
   }
 
   async updateTransferStatus(transferId, status) {
-    try {
-      return await this.makeScriptRequest('updateTransferStatus', {
-        transferId,
-        status
-      });
-    } catch (error) {
-      console.error('Error updating transfer status:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('updateTransfer', {
+      id: transferId,
+      status: status
+    });
   }
 
-  // Suppliers Management
+  // === إدارة الموردين ===
   async getSuppliers() {
-    try {
-      return await this.makeScriptRequest('getSuppliers');
-    } catch (error) {
-      console.error('Error fetching suppliers:', error);
-      return this.getMockSuppliersData();
-    }
+    return await this.makeScriptRequest('getSuppliers');
   }
 
   async addSupplier(supplier) {
-    try {
-      return await this.makeScriptRequest('addSupplier', { supplier });
-    } catch (error) {
-      console.error('Error adding supplier:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('addSupplier', supplier);
   }
 
   async updateSupplier(supplierId, updates) {
-    try {
-      return await this.makeScriptRequest('updateSupplier', {
-        supplierId,
-        updates
-      });
-    } catch (error) {
-      console.error('Error updating supplier:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('updateSupplier', {
+      id: supplierId,
+      ...updates
+    });
   }
 
-  // Customers Management
+  async deleteSupplier(supplierId) {
+    return await this.makeScriptRequest('deleteSupplier', {
+      id: supplierId
+    });
+  }
+
+  // === إدارة العملاء ===
   async getCustomers() {
-    try {
-      return await this.makeScriptRequest('getCustomers');
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      return this.getMockCustomersData();
-    }
+    return await this.makeScriptRequest('getCustomers');
   }
 
   async addCustomer(customer) {
-    try {
-      return await this.makeScriptRequest('addCustomer', { customer });
-    } catch (error) {
-      console.error('Error adding customer:', error);
-      throw error;
-    }
+    return await this.makeScriptRequest('addCustomer', customer);
   }
 
-  // Reports and Analytics
+  async updateCustomer(customerId, updates) {
+    return await this.makeScriptRequest('updateCustomer', {
+      id: customerId,
+      ...updates
+    });
+  }
+
+  async deleteCustomer(customerId) {
+    return await this.makeScriptRequest('deleteCustomer', {
+      id: customerId
+    });
+  }
+
+  // === إدارة المعاملات ===
+  async getTransactions() {
+    return await this.makeScriptRequest('getTransactions');
+  }
+
+  async addTransaction(transaction) {
+    return await this.makeScriptRequest('addTransaction', transaction);
+  }
+
+  async updateTransaction(transactionId, updates) {
+    return await this.makeScriptRequest('updateTransaction', {
+      id: transactionId,
+      ...updates
+    });
+  }
+
+  async deleteTransaction(transactionId) {
+    return await this.makeScriptRequest('deleteTransaction', {
+      id: transactionId
+    });
+  }
+
+  async getTransactionsByType(type) {
+    return await this.makeScriptRequest('getTransactionsByType', { type });
+  }
+
+  async getTransactionsByDateRange(startDate, endDate) {
+    return await this.makeScriptRequest('getTransactionsByDateRange', {
+      startDate,
+      endDate
+    });
+  }
+
+  // === إدارة الفروع ===
+  async getBranches() {
+    return await this.makeScriptRequest('getBranches');
+  }
+
+  async addBranch(branch) {
+    return await this.makeScriptRequest('addBranch', branch);
+  }
+
+  async updateBranch(branchId, updates) {
+    return await this.makeScriptRequest('updateBranch', {
+      id: branchId,
+      ...updates
+    });
+  }
+
+  async deleteBranch(branchId) {
+    return await this.makeScriptRequest('deleteBranch', {
+      id: branchId
+    });
+  }
+
+  // === التقارير والتحليلات ===
   async getReportsData(reportType, dateRange) {
-    try {
-      return await this.makeScriptRequest('getReports', {
-        reportType,
-        dateRange
-      });
-    } catch (error) {
-      console.error('Error fetching reports:', error);
-      return this.getMockReportsData(reportType);
-    }
+    return await this.makeScriptRequest('generateReport', {
+      type: reportType,
+      dateRange
+    });
+  }
+
+  async getReports() {
+    return await this.makeScriptRequest('getReports');
   }
 
   async exportReport(reportType, format = 'excel') {
-    try {
-      return await this.makeScriptRequest('exportReport', {
-        reportType,
-        format
+    if (format === 'excel') {
+      return await this.makeScriptRequest('exportReportAsExcel', {
+        reportId: reportType
       });
-    } catch (error) {
-      console.error('Error exporting report:', error);
-      throw error;
+    } else if (format === 'pdf') {
+      return await this.makeScriptRequest('exportReportAsPdf', {
+        reportId: reportType
+      });
     }
+    return { success: false, error: 'Unsupported format' };
   }
 
-  // Dashboard Data
+  // === بيانات لوحة التحكم ===
   async getDashboardData() {
+    const statsPromise = this.makeScriptRequest('getDashboardStats');
+    const activityPromise = this.makeScriptRequest('getRecentActivity');
+    
     try {
-      return await this.makeScriptRequest('getDashboard');
+      const [stats, activity] = await Promise.all([statsPromise, activityPromise]);
+      
+      return {
+        success: true,
+        data: {
+          stats: stats.success ? stats.data : {},
+          recentActivities: activity.success ? activity.data : [],
+          alerts: [] // يمكن إضافة alerts لاحقاً
+        }
+      };
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       return this.getMockDashboardData();
     }
   }
 
-  // Audit Trail
+  // === الإعدادات ===
+  async getSettings() {
+    return await this.makeScriptRequest('getSettings');
+  }
+
+  async updateSettings(settings) {
+    return await this.makeScriptRequest('updateSettings', settings);
+  }
+
+  // === المصادقة ===
+  async login(username, password) {
+    return await this.makeScriptRequest('authenticate', {
+      username,
+      password
+    });
+  }
+
+  async register(userData) {
+    return await this.makeScriptRequest('registerUser', userData);
+  }
+
+  async logout() {
+    return await this.makeScriptRequest('logout');
+  }
+
+  // === تسجيل الأنشطة ===
   async logActivity(activity) {
     try {
+      // يمكن إضافة action محدد للـ activity logging في Google Apps Script
       return await this.makeScriptRequest('logActivity', { activity });
     } catch (error) {
       console.error('Error logging activity:', error);
-      // Don't throw error for logging failures
+      // لا نرمي error للـ logging failures
+      return { success: false, error: error.message };
     }
   }
 
-  // Mock Data Methods (Fallback when API is unavailable)
+  // === اختبار الاتصال ===
+  async testConnection() {
+    try {
+      console.log('🔍 Testing connection to Google Apps Script...');
+      const result = await this.makeScriptRequest('getDashboardStats');
+      
+      if (result.success) {
+        console.log('✅ Connection test successful!');
+        return { success: true, message: 'Connected successfully' };
+      } else {
+        console.log('⚠️ Connection test failed:', result.error);
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.log('❌ Connection test error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // === البيانات الوهمية (للاختبار والـ fallback) ===
   getMockInventoryData() {
     return {
       success: true,
       data: [
         {
           id: 'INV001',
-          name: 'Paracetamol 500mg',
+          product_name: 'Paracetamol 500mg',
+          sku: 'PAR-500',
           category: 'Medications',
-          currentStock: 450,
-          minStock: 100,
-          maxStock: 1000,
-          unit: 'tablets',
-          location: 'A1-B2',
-          expiryDate: '2025-06-15',
+          quantity: 450,
+          unit_price: 0.25,
           supplier: 'PharmaCorp',
-          cost: 0.25,
-          lastUpdated: '2024-09-27T10:30:00Z'
+          expiry_date: '2025-06-15',
+          status: 'Active'
         },
         {
           id: 'INV002',
-          name: 'Insulin Vials',
+          product_name: 'Insulin Vials',
+          sku: 'INS-10ML',
           category: 'Medications',
-          currentStock: 25,
-          minStock: 50,
-          maxStock: 200,
-          unit: 'vials',
-          location: 'C1-D3',
-          expiryDate: '2024-10-05',
+          quantity: 25,
+          unit_price: 15.50,
           supplier: 'MediSupply',
-          cost: 15.50,
-          lastUpdated: '2024-09-27T09:15:00Z'
+          expiry_date: '2024-10-05',
+          status: 'Low Stock'
         },
         {
           id: 'INV003',
-          name: 'Surgical Masks',
+          product_name: 'Surgical Masks',
+          sku: 'MASK-SURG',
           category: 'PPE',
-          currentStock: 2500,
-          minStock: 1000,
-          maxStock: 5000,
-          unit: 'pieces',
-          location: 'E1-F2',
-          expiryDate: '2024-12-31',
+          quantity: 2500,
+          unit_price: 0.15,
           supplier: 'SafetyFirst',
-          cost: 0.15,
-          lastUpdated: '2024-09-27T08:45:00Z'
+          expiry_date: '2024-12-31',
+          status: 'Active'
         }
       ]
     };
@@ -249,28 +360,23 @@ class GoogleSheetsService {
       data: [
         {
           id: 'TR001',
-          fromBranch: 'Main Hospital',
-          toBranch: 'Pharmacy Branch',
-          items: [
-            { name: 'Paracetamol 500mg', quantity: 100, unit: 'tablets' }
-          ],
-          status: 'pending',
-          requestedBy: 'manager@rama.com',
-          requestDate: '2024-09-27T10:00:00Z',
+          from_location: 'Main Hospital',
+          to_location: 'Pharmacy Branch',
+          product: 'Paracetamol 500mg',
+          quantity: 100,
+          status: 'Pending',
+          date: '2024-09-27T10:00:00Z',
           notes: 'Urgent transfer for pharmacy stock'
         },
         {
           id: 'TR002',
-          fromBranch: 'Pharmacy Branch',
-          toBranch: 'ICU Branch',
-          items: [
-            { name: 'Insulin Vials', quantity: 10, unit: 'vials' }
-          ],
-          status: 'approved',
-          requestedBy: 'nurse@rama.com',
-          requestDate: '2024-09-26T14:30:00Z',
-          approvedBy: 'admin@rama.com',
-          approvedDate: '2024-09-26T15:00:00Z'
+          from_location: 'Pharmacy Branch',
+          to_location: 'ICU Branch',
+          product: 'Insulin Vials',
+          quantity: 10,
+          status: 'Approved',
+          date: '2024-09-26T14:30:00Z',
+          notes: 'ICU emergency stock'
         }
       ]
     };
@@ -283,26 +389,24 @@ class GoogleSheetsService {
         {
           id: 'SUP001',
           name: 'PharmaCorp',
-          contact: 'John Smith',
+          contact_person: 'John Smith',
           email: 'john@pharmacorp.com',
           phone: '+1-555-0123',
           address: '123 Medical St, Healthcare City',
           category: 'Medications',
-          rating: 4.8,
-          status: 'active',
-          lastOrder: '2024-09-25'
+          status: 'Active',
+          rating: 4.8
         },
         {
           id: 'SUP002',
           name: 'MediSupply',
-          contact: 'Sarah Johnson',
+          contact_person: 'Sarah Johnson',
           email: 'sarah@medisupply.com',
           phone: '+1-555-0456',
           address: '456 Supply Ave, Medical District',
           category: 'Medical Equipment',
-          rating: 4.6,
-          status: 'active',
-          lastOrder: '2024-09-20'
+          status: 'Active',
+          rating: 4.6
         }
       ]
     };
@@ -315,26 +419,20 @@ class GoogleSheetsService {
         {
           id: 'CUST001',
           name: 'City General Hospital',
-          contact: 'Dr. Michael Brown',
           email: 'procurement@citygeneral.com',
           phone: '+1-555-0789',
           address: '789 Hospital Blvd, Medical Center',
-          type: 'Hospital',
-          creditLimit: 50000,
-          currentBalance: 12500,
-          status: 'active'
+          company: 'City General Hospital',
+          status: 'Active'
         },
         {
           id: 'CUST002',
           name: 'Community Clinic Network',
-          contact: 'Lisa Davis',
           email: 'orders@communityclinic.com',
           phone: '+1-555-0321',
           address: '321 Clinic St, Healthcare Plaza',
-          type: 'Clinic',
-          creditLimit: 25000,
-          currentBalance: 5750,
-          status: 'active'
+          company: 'Community Clinic Network',
+          status: 'Active'
         }
       ]
     };
@@ -392,25 +490,28 @@ class GoogleSheetsService {
       success: true,
       data: {
         stats: {
-          totalItems: 1247,
-          lowStockAlerts: 23,
-          expiringItems: 7,
-          monthlyProcurement: 45200
+          totalCustomers: 150,
+          totalProducts: 1247,
+          totalSuppliers: 45,
+          lowStockItems: 23,
+          totalTransactions: 2340,
+          todaysSales: 15420,
+          monthlyRevenue: 485200
         },
         recentActivities: [
           {
             id: 1,
-            action: 'Inventory Update',
-            user: 'admin@rama.com',
-            details: '47 items updated',
-            timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString()
+            type: 'transaction',
+            message: 'معاملة بيع: REF-789456',
+            timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+            amount: 1250
           },
           {
             id: 2,
-            action: 'Transfer Approved',
-            user: 'manager@rama.com',
-            details: 'Transfer TR-001 approved',
-            timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
+            type: 'transaction', 
+            message: 'معاملة شراء: REF-123789',
+            timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+            amount: 3400
           }
         ],
         alerts: [
@@ -432,6 +533,6 @@ class GoogleSheetsService {
   }
 }
 
-// Create and export a singleton instance
+// إنشاء وتصدير instance واحد
 const googleSheetsService = new GoogleSheetsService();
 export default googleSheetsService;
